@@ -83,11 +83,71 @@
     return 'full-time';
   }
 
-  // Strip HTML tags and collapse whitespace for plain-text excerpt
-  function toPlainText(html) {
-    return html
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+  // Simple inline formatter: **bold**
+  function inlineFormat(text) {
+    return text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  }
+
+  // Convert plain text with simple markdown into HTML.
+  // ## Heading  →  <h2>
+  // - item       →  <li> inside <ul>
+  // blank line   →  paragraph break
+  // **text**     →  <strong>
+  function parseDescription(text) {
+    if (!text) return '';
+    const lines = text.split(/\r?\n/);
+    let html = '';
+    let inList = false;
+    let paraLines = [];
+
+    function flushPara() {
+      if (paraLines.length) {
+        html += `<p>${paraLines.map(inlineFormat).join('<br>')}</p>`;
+        paraLines = [];
+      }
+    }
+
+    lines.forEach(raw => {
+      const line = raw.trim();
+
+      if (!line) {
+        if (inList) { html += '</ul>'; inList = false; }
+        flushPara();
+        return;
+      }
+
+      if (/^#{1,3}\s+/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        flushPara();
+        html += `<h2>${inlineFormat(line.replace(/^#+\s+/, ''))}</h2>`;
+        return;
+      }
+
+      if (/^[-*•]\s+/.test(line)) {
+        flushPara();
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += `<li>${inlineFormat(line.replace(/^[-*•]\s+/, ''))}</li>`;
+        return;
+      }
+
+      // Regular text line — collect into paragraph
+      if (inList) { html += '</ul>'; inList = false; }
+      paraLines.push(line);
+    });
+
+    if (inList) html += '</ul>';
+    flushPara();
+    return html;
+  }
+
+  // Strip all formatting to plain text for the excerpt
+  function toPlainText(text) {
+    return text
+      .replace(/^#{1,3}\s+/gm, '')
+      .replace(/^[-*•]\s+/gm, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -112,6 +172,7 @@
       : '';
 
     const excerpt = makeExcerpt(job.description, 220);
+    const descHtml = parseDescription(job.description);
 
     return `
       <div class="jb-row">
@@ -138,7 +199,7 @@
 
             <!-- Level 2: full description -->
             <div class="jb-full-section">
-              <div class="jb-row-desc">${job.description || ''}</div>
+              <div class="jb-row-desc">${descHtml}</div>
               <div class="jb-row-actions">
                 ${applyBtn}
                 <span class="jb-btn-show-less">Show Less</span>
