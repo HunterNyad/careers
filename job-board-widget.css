@@ -10,15 +10,15 @@
 
 #job-board-container {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: #141414;
-  color: #e0e0e0;
+  background: #000000;
+  color: #ffffff;
   width: 100%;
 }
 
 /* ─── Header ─────────────────────────────────────────────────── */
 .jb-header {
   padding: 48px 48px 40px;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid #111;
 }
 
 .jb-title {
@@ -59,11 +59,11 @@
 
 /* ─── Job row ────────────────────────────────────────────────── */
 .jb-row {
-  border-top: 1px solid #1a1a1a;
+  border-top: 1px solid #111;
 }
 
 .jb-row:last-child {
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid #111;
 }
 
 .jb-row-main {
@@ -77,12 +77,12 @@
 }
 
 .jb-row-main:hover {
-  background: #191919;
+  background: #0a0a0a;
 }
 
 .jb-row.open .jb-row-main,
 .jb-row.full .jb-row-main {
-  background: #191919;
+  background: #0a0a0a;
   border-left-color: var(--jb-accent, #FF5500);
 }
 
@@ -90,7 +90,7 @@
   flex: 1;
   font-size: 18px;
   font-weight: 500;
-  color: #aaa;
+  color: rgba(255, 255, 255, 0.45);
   transition: color 0.1s;
   letter-spacing: -0.2px;
 }
@@ -110,7 +110,7 @@
 
 .jb-row-loc {
   font-size: 11px;
-  color: #333;
+  color: rgba(255, 255, 255, 0.2);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -118,24 +118,34 @@
 }
 
 .jb-row-main:hover .jb-row-loc {
-  color: #555;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.jb-row.open .jb-row-loc,
+.jb-row.full .jb-row-loc {
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .jb-row-type {
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #2e2e2e;
-  border: 1px solid #1e1e1e;
+  color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 3px 9px;
   white-space: nowrap;
   transition: color 0.1s, border-color 0.1s;
 }
 
+.jb-row-main:hover .jb-row-type {
+  color: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
 .jb-row.open .jb-row-type,
 .jb-row.full .jb-row-type {
-  color: color-mix(in srgb, var(--jb-accent, #FF5500) 65%, transparent);
-  border-color: color-mix(in srgb, var(--jb-accent, #FF5500) 30%, transparent);
+  color: var(--jb-accent, #FF5500);
+  border-color: color-mix(in srgb, var(--jb-accent, #FF5500) 35%, transparent);
 }
 
 .jb-row-apply {
@@ -157,7 +167,7 @@
 .jb-row-toggle {
   font-size: 20px;
   font-weight: 300;
-  color: #282828;
+  color: rgba(255, 255, 255, 0.15);
   flex-shrink: 0;
   width: 20px;
   text-align: center;
@@ -186,7 +196,7 @@
 
 .jb-row-detail-inner {
   padding: 24px 48px 32px;
-  border-top: 1px solid #1a1a1a;
+  border-top: 1px solid #111;
 }
 
 /* ─── Preview section (brief excerpt) ───────────────────────── */
@@ -205,7 +215,7 @@
 .jb-excerpt {
   font-size: 14px;
   line-height: 1.8;
-  color: #555;
+  color: rgba(255, 255, 255, 0.4);
   max-width: 680px;
   margin-bottom: 22px;
 }
@@ -220,7 +230,7 @@
 .jb-row-desc {
   font-size: 13px;
   line-height: 1.9;
-  color: #4a4a4a;
+  color: rgba(255, 255, 255, 0.4);
   max-width: 680px;
   padding-bottom: 22px;
 }
@@ -232,7 +242,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #555;
+  color: rgba(255, 255, 255, 0.55);
   margin: 22px 0 8px;
 }
 
@@ -257,11 +267,11 @@
   content: '—';
   position: absolute;
   left: 0;
-  color: #252525;
+  color: rgba(255, 255, 255, 0.15);
 }
 
 .jb-row-desc strong {
-  color: #666;
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 600;
 }
 
@@ -270,7 +280,7 @@
   align-items: center;
   gap: 24px;
   padding-top: 20px;
-  border-top: 1px solid #1a1a1a;
+  border-top: 1px solid #111;
 }
 
 /* ─── Buttons ────────────────────────────────────────────────── */
@@ -299,7 +309,7 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #333;
+  color: rgba(255, 255, 255, 0.25);
   cursor: pointer;
   transition: color 0.15s;
   user-select: none;
@@ -317,7 +327,7 @@
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #252525;
+  color: rgba(255, 255, 255, 0.15);
 }
 
 /* ─── Loading ─────────────────────────────────────────────────── */
@@ -331,13 +341,13 @@
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #252525;
+  color: rgba(255, 255, 255, 0.15);
 }
 
 .jb-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid #1e1e1e;
+  border: 2px solid rgba(255, 255, 255, 0.08);
   border-top-color: var(--jb-accent, #FF5500);
   border-radius: 50%;
   animation: jb-spin 0.75s linear infinite;
@@ -361,7 +371,7 @@
 
 .jb-error-detail {
   font-size: 12px;
-  color: #333;
+  color: rgba(255, 255, 255, 0.25);
   line-height: 1.7;
   max-width: 500px;
 }
