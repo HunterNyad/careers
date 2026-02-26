@@ -1,528 +1,304 @@
 /**
- * Job Board Widget v1.0
- * Free, self-hosted job board powered by Google Sheets CSV export.
+ * Job Board Widget v2.0
+ * Minimal dark accordion layout — powered by Google Sheets CSV.
  *
- * Usage:
- *   window.JobBoardConfig = {
- *     sheetId: 'YOUR_GOOGLE_SHEET_ID',  // required
- *     containerId: 'job-board-container', // optional, default shown
- *     title: 'Open Positions',            // optional
- *     accentColor: '#0066ff',             // optional
- *     applyButtonText: 'Apply Now',       // optional
- *     csvUrl: 'https://...',              // optional, override full URL
- *   };
+ * window.JobBoardConfig = {
+ *   sheetId: 'YOUR_SHEET_ID',       // required (or use csvUrl)
+ *   csvUrl:  'https://...',          // optional full CSV URL override
+ *   title:   'Open Positions',       // optional
+ *   accentColor: '#FF5500',          // optional
+ *   applyButtonText: 'Apply Now',    // optional
+ *   containerId: 'job-board-container', // optional
+ * };
  *
- * Google Sheet columns (must be in this order):
+ * Sheet columns (A–H):
  *   Title | Location | Type | Department | Description | ApplyURL | LearnMoreURL | Active
  */
 
 (function () {
   'use strict';
 
-  /* ─── Config defaults ───────────────────────────────────────── */
-  const defaults = {
+  /* ─── Config ────────────────────────────────────────────────── */
+  const cfg = Object.assign({
     containerId: 'job-board-container',
     title: 'Open Positions',
-    accentColor: '#0066ff',
+    accentColor: '#FF5500',
     applyButtonText: 'Apply Now',
-  };
+  }, window.JobBoardConfig || {});
 
-  const cfg = Object.assign({}, defaults, window.JobBoardConfig || {});
+  /* ─── Column map ─────────────────────────────────────────────── */
+  const COL = { title:0, location:1, type:2, department:3,
+                description:4, applyURL:5, learnMoreURL:6, active:7 };
 
-  /* ─── Column index map ──────────────────────────────────────── */
-  const COL = {
-    title: 0,
-    location: 1,
-    type: 2,
-    department: 3,
-    description: 4,
-    applyURL: 5,
-    learnMoreURL: 6,
-    active: 7,
-  };
-
-  /* ─── State ─────────────────────────────────────────────────── */
-  let allJobs = [];
-  let selectedJob = null;
+  /* ─── State ──────────────────────────────────────────────────── */
+  let allJobs    = [];
   let filterDept = '';
   let filterType = '';
   let searchQuery = '';
 
-  /* ─── Helpers ───────────────────────────────────────────────── */
-
-  /**
-   * Minimal, safe CSV parser that handles quoted fields with embedded
-   * commas and newlines (RFC 4180 compliant for common cases).
-   */
+  /* ─── CSV parser ─────────────────────────────────────────────── */
   function parseCSV(text) {
     const rows = [];
-    let row = [];
-    let field = '';
-    let inQuotes = false;
-    let i = 0;
-
+    let row = [], field = '', inQ = false, i = 0;
     while (i < text.length) {
-      const ch = text[i];
-      const next = text[i + 1];
-
-      if (inQuotes) {
-        if (ch === '"' && next === '"') {
-          field += '"';
-          i += 2;
-        } else if (ch === '"') {
-          inQuotes = false;
-          i++;
-        } else {
-          field += ch;
-          i++;
-        }
+      const c = text[i], n = text[i+1];
+      if (inQ) {
+        if (c === '"' && n === '"') { field += '"'; i += 2; }
+        else if (c === '"')         { inQ = false; i++; }
+        else                        { field += c; i++; }
       } else {
-        if (ch === '"') {
-          inQuotes = true;
-          i++;
-        } else if (ch === ',') {
-          row.push(field);
-          field = '';
-          i++;
-        } else if (ch === '\r' && next === '\n') {
-          row.push(field);
-          rows.push(row);
-          row = [];
-          field = '';
-          i += 2;
-        } else if (ch === '\n' || ch === '\r') {
-          row.push(field);
-          rows.push(row);
-          row = [];
-          field = '';
-          i++;
-        } else {
-          field += ch;
-          i++;
-        }
+        if      (c === '"')                  { inQ = true; i++; }
+        else if (c === ',')                  { row.push(field); field = ''; i++; }
+        else if (c === '\r' && n === '\n')   { row.push(field); rows.push(row); row=[]; field=''; i+=2; }
+        else if (c === '\n' || c === '\r')   { row.push(field); rows.push(row); row=[]; field=''; i++; }
+        else                                 { field += c; i++; }
       }
     }
-
-    // Handle final field / row
-    if (field !== '' || row.length > 0) {
-      row.push(field);
-      rows.push(row);
-    }
-
+    if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
     return rows;
   }
 
-  function jobFromRow(row) {
+  /* ─── Helpers ────────────────────────────────────────────────── */
+  function jobFromRow(r) {
     return {
-      title: (row[COL.title] || '').trim(),
-      location: (row[COL.location] || '').trim(),
-      type: (row[COL.type] || '').trim(),
-      department: (row[COL.department] || '').trim(),
-      description: (row[COL.description] || '').trim(),
-      applyURL: (row[COL.applyURL] || '').trim(),
-      learnMoreURL: (row[COL.learnMoreURL] || '').trim(),
-      active: (row[COL.active] || '').trim().toLowerCase(),
+      title:       (r[COL.title]       || '').trim(),
+      location:    (r[COL.location]    || '').trim(),
+      type:        (r[COL.type]        || '').trim(),
+      department:  (r[COL.department]  || '').trim(),
+      description: (r[COL.description] || '').trim(),
+      applyURL:    (r[COL.applyURL]    || '').trim(),
+      learnMoreURL:(r[COL.learnMoreURL]|| '').trim(),
+      active:      (r[COL.active]      || '').trim().toLowerCase(),
     };
   }
 
-  function typeClass(type) {
-    const t = (type || '').toLowerCase();
-    if (t.includes('part')) return 'part-time';
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function typeClass(t) {
+    t = (t||'').toLowerCase();
+    if (t.includes('part'))     return 'part-time';
     if (t.includes('contract')) return 'contract';
-    if (t.includes('intern')) return 'internship';
-    return '';
+    if (t.includes('intern'))   return 'internship';
+    return 'full-time';
   }
 
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function matchesSearch(job, q) {
+  function matches(job, q) {
     if (!q) return true;
     const lq = q.toLowerCase();
-    return (
-      job.title.toLowerCase().includes(lq) ||
-      job.location.toLowerCase().includes(lq) ||
-      job.department.toLowerCase().includes(lq) ||
-      job.type.toLowerCase().includes(lq)
+    return job.title.toLowerCase().includes(lq)
+        || job.location.toLowerCase().includes(lq)
+        || job.department.toLowerCase().includes(lq)
+        || job.type.toLowerCase().includes(lq);
+  }
+
+  function filtered() {
+    return allJobs.filter(j =>
+      (!filterDept || j.department === filterDept) &&
+      (!filterType || j.type === filterType) &&
+      matches(j, searchQuery)
     );
   }
 
-  function filteredJobs() {
-    return allJobs.filter((j) => {
-      if (filterDept && j.department !== filterDept) return false;
-      if (filterType && j.type !== filterType) return false;
-      if (!matchesSearch(j, searchQuery)) return false;
-      return true;
-    });
+  function uniqueVals(jobs, key) {
+    const seen = new Set(), out = [];
+    jobs.forEach(j => { if (j[key] && !seen.has(j[key])) { seen.add(j[key]); out.push(j[key]); } });
+    return out.sort();
   }
 
-  function uniqueValues(jobs, key) {
-    const seen = new Set();
-    const values = [];
-    jobs.forEach((j) => {
-      const v = j[key];
-      if (v && !seen.has(v)) {
-        seen.add(v);
-        values.push(v);
-      }
-    });
-    return values.sort();
-  }
-
-  /* ─── Render helpers ────────────────────────────────────────── */
-
-  function renderChip(text, cls, icon) {
-    if (!text) return '';
-    const iconHtml = icon
-      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-             stroke-linejoin="round">${icon}</svg>`
+  /* ─── Row HTML ───────────────────────────────────────────────── */
+  function rowHtml(job) {
+    const applyLink = job.applyURL
+      ? `<a href="${esc(job.applyURL)}" target="_blank" rel="noopener noreferrer"
+            class="jb-row-apply" tabindex="-1">Apply ↗</a>`
       : '';
-    return `<span class="jb-chip ${escapeHtml(cls)}">${iconHtml}${escapeHtml(text)}</span>`;
-  }
 
-  const ICON_LOCATION =
-    '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>';
-  const ICON_TYPE =
-    '<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>';
-  const ICON_DEPT =
-    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>';
+    const applyBtn = job.applyURL
+      ? `<a href="${esc(job.applyURL)}" target="_blank" rel="noopener noreferrer"
+            class="jb-btn-apply">${esc(cfg.applyButtonText)} ↗</a>`
+      : '';
 
-  function cardHtml(job, isActive) {
-    const tClass = typeClass(job.type);
+    const learnBtn = job.learnMoreURL
+      ? `<a href="${esc(job.learnMoreURL)}" target="_blank" rel="noopener noreferrer"
+            class="jb-btn-more">Learn More</a>`
+      : '';
+
+    const desc = job.description || '<p>No description provided.</p>';
+
     return `
-      <div class="jb-card${isActive ? ' active' : ''}" data-title="${escapeHtml(job.title)}">
-        <div class="jb-card-title">${escapeHtml(job.title)}</div>
-        <div class="jb-card-meta">
-          ${job.location ? renderChip(job.location, 'jb-chip-location', ICON_LOCATION) : ''}
-          ${job.type ? renderChip(job.type, `jb-chip-type ${tClass}`, ICON_TYPE) : ''}
-          ${job.department ? renderChip(job.department, 'jb-chip-dept', ICON_DEPT) : ''}
+      <div class="jb-row">
+        <div class="jb-row-main">
+          <span class="jb-row-title">${esc(job.title)}</span>
+          <div class="jb-row-meta">
+            ${job.location ? `<span class="jb-row-loc">${esc(job.location)}</span>` : ''}
+            ${job.type     ? `<span class="jb-row-type ${typeClass(job.type)}">${esc(job.type)}</span>` : ''}
+          </div>
+          ${applyLink}
+          <span class="jb-row-toggle">+</span>
+        </div>
+        <div class="jb-row-detail">
+          <div class="jb-row-detail-inner">
+            <div class="jb-row-desc">${desc}</div>
+            ${applyBtn || learnBtn ? `<div class="jb-row-actions">${applyBtn}${learnBtn}</div>` : ''}
+          </div>
         </div>
       </div>`;
   }
 
-  function detailHtml(job) {
-    const applyBtn = job.applyURL
-      ? `<a href="${escapeHtml(job.applyURL)}" target="_blank" rel="noopener noreferrer"
-            class="jb-btn-primary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
-            ${escapeHtml(cfg.applyButtonText)}
-          </a>`
-      : '';
+  /* ─── Render list ────────────────────────────────────────────── */
+  function updateList() {
+    const container = document.getElementById(cfg.containerId);
+    const list = container.querySelector('.jb-list');
+    const countEl = container.querySelector('.jb-count');
+    if (!list) return;
 
-    const learnBtn = job.learnMoreURL
-      ? `<a href="${escapeHtml(job.learnMoreURL)}" target="_blank" rel="noopener noreferrer"
-            class="jb-btn-secondary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            Learn More
-          </a>`
-      : '';
+    const jobs = filtered();
 
-    // Allow basic HTML in description field
-    const descriptionContent = job.description || '<em>No description provided.</em>';
-
-    return `
-      <div class="jb-detail-header">
-        <div class="jb-detail-title">${escapeHtml(job.title)}</div>
-        <div class="jb-detail-chips">
-          ${job.location
-            ? `<span class="jb-detail-chip jb-detail-chip-location">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  ${ICON_LOCATION}
-                </svg>
-                ${escapeHtml(job.location)}</span>`
-            : ''}
-          ${job.type
-            ? `<span class="jb-detail-chip jb-detail-chip-type">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  ${ICON_TYPE}
-                </svg>
-                ${escapeHtml(job.type)}</span>`
-            : ''}
-          ${job.department
-            ? `<span class="jb-detail-chip jb-detail-chip-dept">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  ${ICON_DEPT}
-                </svg>
-                ${escapeHtml(job.department)}</span>`
-            : ''}
-        </div>
-      </div>
-      <div class="jb-divider"></div>
-      <div class="jb-detail-description">${descriptionContent}</div>
-      ${applyBtn || learnBtn
-        ? `<div class="jb-actions">${applyBtn}${learnBtn}</div>`
-        : ''}`;
-  }
-
-  /* ─── DOM update functions ──────────────────────────────────── */
-
-  function getContainer() {
-    return document.getElementById(cfg.containerId);
-  }
-
-  function updateListPanel(jobs) {
-    const panel = getContainer().querySelector('.jb-list-panel');
-    if (!panel) return;
+    if (countEl) {
+      countEl.textContent = jobs.length === allJobs.length
+        ? `${allJobs.length} open role${allJobs.length !== 1 ? 's' : ''}`
+        : `${jobs.length} of ${allJobs.length} roles`;
+    }
 
     if (jobs.length === 0) {
-      panel.innerHTML = `
-        <div class="jb-empty">
-          <div class="jb-empty-icon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </div>
-          <p>No jobs match your filters.</p>
-        </div>`;
+      list.innerHTML = `<div class="jb-empty">No roles match.</div>`;
       return;
     }
 
-    panel.innerHTML = jobs.map((j) => cardHtml(j, j === selectedJob)).join('');
+    // Group by department (preserve first-seen order)
+    const order = [], groups = {};
+    jobs.forEach(j => {
+      const d = j.department || 'General';
+      if (!groups[d]) { groups[d] = []; order.push(d); }
+      groups[d].push(j);
+    });
 
-    // Card click listeners
-    panel.querySelectorAll('.jb-card').forEach((card, idx) => {
-      card.addEventListener('click', () => {
-        selectedJob = jobs[idx];
-        updateListPanel(filteredJobs());
-        updateDetailPanel(selectedJob);
+    list.innerHTML = order.map(dept => `
+      <div class="jb-group">
+        <div class="jb-group-header">
+          <span class="jb-group-name">${esc(dept)}</span>
+          <span class="jb-group-count">${groups[dept].length}</span>
+        </div>
+        ${groups[dept].map(rowHtml).join('')}
+      </div>`
+    ).join('');
+
+    // Accordion click — toggle open/close
+    list.querySelectorAll('.jb-row').forEach(row => {
+      row.querySelector('.jb-row-main').addEventListener('click', e => {
+        if (e.target.closest('.jb-row-apply')) return; // let apply link through
+        const isOpen = row.classList.contains('open');
+        list.querySelectorAll('.jb-row.open').forEach(r => r.classList.remove('open'));
+        if (!isOpen) row.classList.add('open');
       });
     });
   }
 
-  function updateDetailPanel(job) {
-    const panel = getContainer().querySelector('.jb-detail-panel');
-    if (!panel) return;
+  /* ─── Update filter dropdowns ────────────────────────────────── */
+  function updateDropdowns() {
+    const container = document.getElementById(cfg.containerId);
+    const deptSel = container.querySelector('.jb-filter-dept');
+    const typeSel = container.querySelector('.jb-filter-type');
+    if (!deptSel || !typeSel) return;
 
-    if (!job) {
-      panel.innerHTML = `
-        <div class="jb-detail-placeholder">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-          </svg>
-          <p>Select a job to view details</p>
-        </div>`;
-      return;
-    }
+    const depts = uniqueVals(allJobs, 'department');
+    const types = uniqueVals(allJobs, 'type');
 
-    panel.innerHTML = detailHtml(job);
+    deptSel.innerHTML = '<option value="">All Departments</option>'
+      + depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+
+    typeSel.innerHTML = '<option value="">All Types</option>'
+      + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
   }
 
-  function updateFilters() {
-    const container = getContainer();
-    const deptSelect = container.querySelector('.jb-filter-dept');
-    const typeSelect = container.querySelector('.jb-filter-type');
-    if (!deptSelect || !typeSelect) return;
-
-    const depts = uniqueValues(allJobs, 'department');
-    const types = uniqueValues(allJobs, 'type');
-
-    const prevDept = deptSelect.value;
-    const prevType = typeSelect.value;
-
-    deptSelect.innerHTML =
-      '<option value="">All Departments</option>' +
-      depts.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
-
-    typeSelect.innerHTML =
-      '<option value="">All Types</option>' +
-      types.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-
-    // Restore previously selected values if still valid
-    if (depts.includes(prevDept)) deptSelect.value = prevDept;
-    if (types.includes(prevType)) typeSelect.value = prevType;
-  }
-
-  function updateJobCount(count, total) {
-    const el = getContainer().querySelector('.jb-job-count');
-    if (!el) return;
-    el.textContent =
-      count === total
-        ? `${total} position${total !== 1 ? 's' : ''}`
-        : `${count} of ${total} positions`;
-  }
-
-  /* ─── Full render after filter change ──────────────────────── */
-
-  function applyFilters() {
-    const jobs = filteredJobs();
-    updateJobCount(jobs.length, allJobs.length);
-
-    // If selected job no longer in results, clear or pick first
-    if (selectedJob && !jobs.includes(selectedJob)) {
-      selectedJob = jobs[0] || null;
-    } else if (!selectedJob && jobs.length > 0) {
-      selectedJob = jobs[0];
-    }
-
-    updateListPanel(jobs);
-    updateDetailPanel(selectedJob);
-  }
-
-  /* ─── Build full widget skeleton ─────────────────────────────── */
-
+  /* ─── Build skeleton ─────────────────────────────────────────── */
   function buildWidget(container) {
-    container.style.setProperty('--jb-accent', cfg.accentColor || '#0066ff');
+    container.style.setProperty('--jb-accent', cfg.accentColor || '#FF5500');
 
     container.innerHTML = `
       <div class="jb-header">
-        <h2>${escapeHtml(cfg.title || 'Open Positions')}</h2>
-        <div class="jb-job-count"></div>
+        <span class="jb-title">${esc(cfg.title || 'Open Positions')}</span>
+        <div class="jb-controls">
+          <input type="text" class="jb-search" placeholder="Search roles" autocomplete="off">
+          <select class="jb-filter-select jb-filter-dept">
+            <option value="">All Departments</option>
+          </select>
+          <select class="jb-filter-select jb-filter-type">
+            <option value="">All Types</option>
+          </select>
+        </div>
       </div>
-      <div class="jb-filters">
-        <input type="text" class="jb-filter-input" placeholder="Search jobs…" autocomplete="off" />
-        <select class="jb-filter-select jb-filter-dept">
-          <option value="">All Departments</option>
-        </select>
-        <select class="jb-filter-select jb-filter-type">
-          <option value="">All Types</option>
-        </select>
-      </div>
-      <div class="jb-layout">
-        <div class="jb-list-panel"></div>
-        <div class="jb-detail-panel"></div>
-      </div>`;
+      <div class="jb-list"></div>`;
 
-    // Search input
-    const searchInput = container.querySelector('.jb-filter-input');
-    searchInput.addEventListener('input', (e) => {
+    container.querySelector('.jb-search').addEventListener('input', e => {
       searchQuery = e.target.value;
-      applyFilters();
+      updateList();
     });
-
-    // Department filter
-    const deptSelect = container.querySelector('.jb-filter-dept');
-    deptSelect.addEventListener('change', (e) => {
+    container.querySelector('.jb-filter-dept').addEventListener('change', e => {
       filterDept = e.target.value;
-      applyFilters();
+      updateList();
     });
-
-    // Type filter
-    const typeSelect = container.querySelector('.jb-filter-type');
-    typeSelect.addEventListener('change', (e) => {
+    container.querySelector('.jb-filter-type').addEventListener('change', e => {
       filterType = e.target.value;
-      applyFilters();
+      updateList();
     });
   }
 
-  /* ─── Loading / Error states ────────────────────────────────── */
-
-  function showLoading(container) {
-    container.innerHTML = `
-      <div class="jb-loading">
-        <div class="jb-spinner"></div>
-        <span>Loading positions…</span>
-      </div>`;
+  /* ─── Loading / error ────────────────────────────────────────── */
+  function showLoading(c) {
+    c.innerHTML = `<div class="jb-loading"><div class="jb-spinner"></div><span>Loading</span></div>`;
   }
 
-  function showError(container, message, detail) {
-    container.innerHTML = `
+  function showError(c, msg, detail) {
+    c.innerHTML = `
       <div class="jb-error">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        <div class="jb-error-title">${escapeHtml(message)}</div>
-        ${detail ? `<div class="jb-error-detail">${escapeHtml(detail)}</div>` : ''}
+        <div class="jb-error-title">${esc(msg)}</div>
+        ${detail ? `<div class="jb-error-detail">${esc(detail)}</div>` : ''}
       </div>`;
   }
 
-  /* ─── Data fetch & init ──────────────────────────────────────── */
-
-  function getCsvUrl() {
-    if (cfg.csvUrl) return cfg.csvUrl;
-    if (!cfg.sheetId) return null;
-    return `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/export?format=csv`;
+  /* ─── Fetch & init ───────────────────────────────────────────── */
+  function csvUrl() {
+    if (cfg.csvUrl)   return cfg.csvUrl;
+    if (cfg.sheetId)  return `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/export?format=csv`;
+    return null;
   }
 
-  async function loadJobs(container) {
-    const url = getCsvUrl();
-
-    if (!url) {
-      showError(
-        container,
-        'Configuration error',
-        'No sheetId or csvUrl provided in window.JobBoardConfig.'
-      );
-      return;
-    }
+  async function load(container) {
+    const url = csvUrl();
+    if (!url) { showError(container, 'Configuration error', 'No sheetId or csvUrl set.'); return; }
 
     showLoading(container);
 
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      const text = await response.text();
-      const rows = parseCSV(text);
-
-      // Skip header row (first row)
-      const dataRows = rows.slice(1).filter((r) => r.some((c) => c.trim() !== ''));
-
-      allJobs = dataRows
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = parseCSV(await res.text());
+      allJobs = rows.slice(1)
+        .filter(r => r.some(c => c.trim()))
         .map(jobFromRow)
-        .filter((j) => j.active === 'yes' && j.title);
-
-      if (allJobs.length === 0) {
-        buildWidget(container);
-        updateFilters();
-        updateJobCount(0, 0);
-        updateListPanel([]);
-        updateDetailPanel(null);
-        return;
-      }
+        .filter(j => j.active === 'yes' && j.title);
 
       buildWidget(container);
-      updateFilters();
-      selectedJob = allJobs[0];
-      applyFilters();
+      updateDropdowns();
+      updateList();
     } catch (err) {
       console.error('[JobBoard]', err);
-      showError(
-        container,
-        'Could not load jobs',
-        'Make sure your Google Sheet is published as CSV (File → Share → Publish to web). ' +
-          err.message
-      );
+      showError(container, 'Could not load roles',
+        'Ensure your Google Sheet is published as CSV (File → Share → Publish to web). ' + err.message);
     }
   }
-
-  /* ─── Bootstrap ──────────────────────────────────────────────── */
 
   function init() {
     const container = document.getElementById(cfg.containerId);
-    if (!container) {
-      console.warn(`[JobBoard] Container #${cfg.containerId} not found.`);
-      return;
-    }
-    loadJobs(container);
+    if (!container) { console.warn(`[JobBoard] #${cfg.containerId} not found`); return; }
+    load(container);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', init)
+    : init();
 })();
