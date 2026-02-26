@@ -1,13 +1,13 @@
 /**
- * Job Board Widget v2.0
- * Minimal dark accordion layout — powered by Google Sheets CSV.
+ * Job Board Widget v3.0
+ * Minimal dark two-level accordion — powered by Google Sheets CSV.
  *
  * window.JobBoardConfig = {
- *   sheetId: 'YOUR_SHEET_ID',       // required (or use csvUrl)
- *   csvUrl:  'https://...',          // optional full CSV URL override
- *   title:   'Open Positions',       // optional
- *   accentColor: '#FF5500',          // optional
- *   applyButtonText: 'Apply Now',    // optional
+ *   sheetId: 'YOUR_SHEET_ID',          // required (or use csvUrl)
+ *   csvUrl:  'https://...',             // optional full CSV URL override
+ *   title:   'Open Positions',          // optional
+ *   accentColor: '#FF5500',             // optional
+ *   applyButtonText: 'Apply Now',       // optional
  *   containerId: 'job-board-container', // optional
  * };
  *
@@ -18,7 +18,7 @@
 (function () {
   'use strict';
 
-  /* ─── Config ────────────────────────────────────────────────── */
+  /* ─── Config ─────────────────────────────────────────────────── */
   const cfg = Object.assign({
     containerId: 'job-board-container',
     title: 'Open Positions',
@@ -26,17 +26,14 @@
     applyButtonText: 'Apply Now',
   }, window.JobBoardConfig || {});
 
-  /* ─── Column map ─────────────────────────────────────────────── */
+  /* ─── Column map ──────────────────────────────────────────────── */
   const COL = { title:0, location:1, type:2, department:3,
                 description:4, applyURL:5, learnMoreURL:6, active:7 };
 
-  /* ─── State ──────────────────────────────────────────────────── */
-  let allJobs    = [];
-  let filterDept = '';
-  let filterType = '';
-  let searchQuery = '';
+  /* ─── State ───────────────────────────────────────────────────── */
+  let allJobs = [];
 
-  /* ─── CSV parser ─────────────────────────────────────────────── */
+  /* ─── CSV parser ──────────────────────────────────────────────── */
   function parseCSV(text) {
     const rows = [];
     let row = [], field = '', inQ = false, i = 0;
@@ -47,28 +44,28 @@
         else if (c === '"')         { inQ = false; i++; }
         else                        { field += c; i++; }
       } else {
-        if      (c === '"')                  { inQ = true; i++; }
-        else if (c === ',')                  { row.push(field); field = ''; i++; }
-        else if (c === '\r' && n === '\n')   { row.push(field); rows.push(row); row=[]; field=''; i+=2; }
-        else if (c === '\n' || c === '\r')   { row.push(field); rows.push(row); row=[]; field=''; i++; }
-        else                                 { field += c; i++; }
+        if      (c === '"')                { inQ = true; i++; }
+        else if (c === ',')               { row.push(field); field = ''; i++; }
+        else if (c === '\r' && n === '\n') { row.push(field); rows.push(row); row=[]; field=''; i+=2; }
+        else if (c === '\n' || c === '\r') { row.push(field); rows.push(row); row=[]; field=''; i++; }
+        else                              { field += c; i++; }
       }
     }
     if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
     return rows;
   }
 
-  /* ─── Helpers ────────────────────────────────────────────────── */
+  /* ─── Helpers ─────────────────────────────────────────────────── */
   function jobFromRow(r) {
     return {
-      title:       (r[COL.title]       || '').trim(),
-      location:    (r[COL.location]    || '').trim(),
-      type:        (r[COL.type]        || '').trim(),
-      department:  (r[COL.department]  || '').trim(),
-      description: (r[COL.description] || '').trim(),
-      applyURL:    (r[COL.applyURL]    || '').trim(),
-      learnMoreURL:(r[COL.learnMoreURL]|| '').trim(),
-      active:      (r[COL.active]      || '').trim().toLowerCase(),
+      title:        (r[COL.title]        || '').trim(),
+      location:     (r[COL.location]     || '').trim(),
+      type:         (r[COL.type]         || '').trim(),
+      department:   (r[COL.department]   || '').trim(),
+      description:  (r[COL.description]  || '').trim(),
+      applyURL:     (r[COL.applyURL]     || '').trim(),
+      learnMoreURL: (r[COL.learnMoreURL] || '').trim(),
+      active:       (r[COL.active]       || '').trim().toLowerCase(),
     };
   }
 
@@ -79,41 +76,34 @@
   }
 
   function typeClass(t) {
-    t = (t||'').toLowerCase();
+    t = (t || '').toLowerCase();
     if (t.includes('part'))     return 'part-time';
     if (t.includes('contract')) return 'contract';
     if (t.includes('intern'))   return 'internship';
     return 'full-time';
   }
 
-  function matches(job, q) {
-    if (!q) return true;
-    const lq = q.toLowerCase();
-    return job.title.toLowerCase().includes(lq)
-        || job.location.toLowerCase().includes(lq)
-        || job.department.toLowerCase().includes(lq)
-        || job.type.toLowerCase().includes(lq);
+  // Strip HTML tags and collapse whitespace for plain-text excerpt
+  function toPlainText(html) {
+    return html
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
-  function filtered() {
-    return allJobs.filter(j =>
-      (!filterDept || j.department === filterDept) &&
-      (!filterType || j.type === filterType) &&
-      matches(j, searchQuery)
-    );
+  function makeExcerpt(desc, maxLen) {
+    if (!desc) return '';
+    const text = toPlainText(desc);
+    if (text.length <= maxLen) return text;
+    return text.slice(0, maxLen).replace(/\s\S*$/, '') + '…';
   }
 
-  function uniqueVals(jobs, key) {
-    const seen = new Set(), out = [];
-    jobs.forEach(j => { if (j[key] && !seen.has(j[key])) { seen.add(j[key]); out.push(j[key]); } });
-    return out.sort();
-  }
-
-  /* ─── Row HTML ───────────────────────────────────────────────── */
+  /* ─── Row HTML ────────────────────────────────────────────────── */
   function rowHtml(job) {
     const applyLink = job.applyURL
       ? `<a href="${esc(job.applyURL)}" target="_blank" rel="noopener noreferrer"
-            class="jb-row-apply" tabindex="-1">Apply ↗</a>`
+            class="jb-row-apply">Apply ↗</a>`
       : '';
 
     const applyBtn = job.applyURL
@@ -121,12 +111,7 @@
             class="jb-btn-apply">${esc(cfg.applyButtonText)} ↗</a>`
       : '';
 
-    const learnBtn = job.learnMoreURL
-      ? `<a href="${esc(job.learnMoreURL)}" target="_blank" rel="noopener noreferrer"
-            class="jb-btn-more">Learn More</a>`
-      : '';
-
-    const desc = job.description || '<p>No description provided.</p>';
+    const excerpt = makeExcerpt(job.description, 220);
 
     return `
       <div class="jb-row">
@@ -141,36 +126,44 @@
         </div>
         <div class="jb-row-detail">
           <div class="jb-row-detail-inner">
-            <div class="jb-row-desc">${desc}</div>
-            ${applyBtn || learnBtn ? `<div class="jb-row-actions">${applyBtn}${learnBtn}</div>` : ''}
+
+            <!-- Level 1: brief excerpt -->
+            <div class="jb-preview-section">
+              ${excerpt ? `<p class="jb-excerpt">${esc(excerpt)}</p>` : ''}
+              <div class="jb-preview-actions">
+                ${applyBtn}
+                ${job.description ? `<span class="jb-btn-learn-more">Learn More →</span>` : ''}
+              </div>
+            </div>
+
+            <!-- Level 2: full description -->
+            <div class="jb-full-section">
+              <div class="jb-row-desc">${job.description || ''}</div>
+              <div class="jb-row-actions">
+                ${applyBtn}
+                <span class="jb-btn-show-less">Show Less</span>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>`;
   }
 
-  /* ─── Render list ────────────────────────────────────────────── */
+  /* ─── Render list ─────────────────────────────────────────────── */
   function updateList() {
     const container = document.getElementById(cfg.containerId);
     const list = container.querySelector('.jb-list');
-    const countEl = container.querySelector('.jb-count');
     if (!list) return;
 
-    const jobs = filtered();
-
-    if (countEl) {
-      countEl.textContent = jobs.length === allJobs.length
-        ? `${allJobs.length} open role${allJobs.length !== 1 ? 's' : ''}`
-        : `${jobs.length} of ${allJobs.length} roles`;
-    }
-
-    if (jobs.length === 0) {
-      list.innerHTML = `<div class="jb-empty">No roles match.</div>`;
+    if (allJobs.length === 0) {
+      list.innerHTML = `<div class="jb-empty">No open roles at this time.</div>`;
       return;
     }
 
-    // Group by department (preserve first-seen order)
+    // Group by department, preserving first-seen order
     const order = [], groups = {};
-    jobs.forEach(j => {
+    allJobs.forEach(j => {
       const d = j.department || 'General';
       if (!groups[d]) { groups[d] = []; order.push(d); }
       groups[d].push(j);
@@ -180,74 +173,56 @@
       <div class="jb-group">
         <div class="jb-group-header">
           <span class="jb-group-name">${esc(dept)}</span>
-          <span class="jb-group-count">${groups[dept].length}</span>
         </div>
         ${groups[dept].map(rowHtml).join('')}
       </div>`
     ).join('');
 
-    // Accordion click — toggle open/close
+    // Attach event listeners to every row
     list.querySelectorAll('.jb-row').forEach(row => {
+
+      // Click row header → open preview (level 1)
       row.querySelector('.jb-row-main').addEventListener('click', e => {
-        if (e.target.closest('.jb-row-apply')) return; // let apply link through
-        const isOpen = row.classList.contains('open');
-        list.querySelectorAll('.jb-row.open').forEach(r => r.classList.remove('open'));
+        if (e.target.closest('.jb-row-apply')) return;
+        const isOpen = row.classList.contains('open') || row.classList.contains('full');
+        // Close all rows first
+        list.querySelectorAll('.jb-row').forEach(r => r.classList.remove('open', 'full'));
         if (!isOpen) row.classList.add('open');
       });
+
+      // "Learn More" → expand to full description (level 2)
+      const learnMore = row.querySelector('.jb-btn-learn-more');
+      if (learnMore) {
+        learnMore.addEventListener('click', e => {
+          e.stopPropagation();
+          row.classList.remove('open');
+          row.classList.add('full');
+        });
+      }
+
+      // "Show Less" → collapse back to preview (level 1)
+      const showLess = row.querySelector('.jb-btn-show-less');
+      if (showLess) {
+        showLess.addEventListener('click', e => {
+          e.stopPropagation();
+          row.classList.remove('full');
+          row.classList.add('open');
+        });
+      }
     });
   }
 
-  /* ─── Update filter dropdowns ────────────────────────────────── */
-  function updateDropdowns() {
-    const container = document.getElementById(cfg.containerId);
-    const deptSel = container.querySelector('.jb-filter-dept');
-    const typeSel = container.querySelector('.jb-filter-type');
-    if (!deptSel || !typeSel) return;
-
-    const depts = uniqueVals(allJobs, 'department');
-    const types = uniqueVals(allJobs, 'type');
-
-    deptSel.innerHTML = '<option value="">All Departments</option>'
-      + depts.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
-
-    typeSel.innerHTML = '<option value="">All Types</option>'
-      + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  }
-
-  /* ─── Build skeleton ─────────────────────────────────────────── */
+  /* ─── Build widget skeleton ───────────────────────────────────── */
   function buildWidget(container) {
     container.style.setProperty('--jb-accent', cfg.accentColor || '#FF5500');
-
     container.innerHTML = `
       <div class="jb-header">
-        <span class="jb-title">${esc(cfg.title || 'Open Positions')}</span>
-        <div class="jb-controls">
-          <input type="text" class="jb-search" placeholder="Search roles" autocomplete="off">
-          <select class="jb-filter-select jb-filter-dept">
-            <option value="">All Departments</option>
-          </select>
-          <select class="jb-filter-select jb-filter-type">
-            <option value="">All Types</option>
-          </select>
-        </div>
+        <div class="jb-title">${esc(cfg.title || 'Open Positions')}</div>
       </div>
       <div class="jb-list"></div>`;
-
-    container.querySelector('.jb-search').addEventListener('input', e => {
-      searchQuery = e.target.value;
-      updateList();
-    });
-    container.querySelector('.jb-filter-dept').addEventListener('change', e => {
-      filterDept = e.target.value;
-      updateList();
-    });
-    container.querySelector('.jb-filter-type').addEventListener('change', e => {
-      filterType = e.target.value;
-      updateList();
-    });
   }
 
-  /* ─── Loading / error ────────────────────────────────────────── */
+  /* ─── Loading / error ─────────────────────────────────────────── */
   function showLoading(c) {
     c.innerHTML = `<div class="jb-loading"><div class="jb-spinner"></div><span>Loading</span></div>`;
   }
@@ -260,10 +235,10 @@
       </div>`;
   }
 
-  /* ─── Fetch & init ───────────────────────────────────────────── */
+  /* ─── Fetch & init ────────────────────────────────────────────── */
   function csvUrl() {
-    if (cfg.csvUrl)   return cfg.csvUrl;
-    if (cfg.sheetId)  return `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/export?format=csv`;
+    if (cfg.csvUrl)  return cfg.csvUrl;
+    if (cfg.sheetId) return `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/export?format=csv`;
     return null;
   }
 
@@ -283,7 +258,6 @@
         .filter(j => j.active === 'yes' && j.title);
 
       buildWidget(container);
-      updateDropdowns();
       updateList();
     } catch (err) {
       console.error('[JobBoard]', err);
