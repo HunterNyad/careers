@@ -90,7 +90,7 @@
   flex: 1;
   font-size: 18px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
   transition: color 0.1s;
   letter-spacing: -0.2px;
 }
@@ -110,7 +110,7 @@
 
 .jb-row-loc {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -118,20 +118,20 @@
 }
 
 .jb-row-main:hover .jb-row-loc {
-  color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
 }
 
 .jb-row.open .jb-row-loc,
 .jb-row.full .jb-row-loc {
-  color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
 }
 
 .jb-row-type {
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 3px 9px;
   white-space: nowrap;
   transition: color 0.1s, border-color 0.1s;
@@ -139,7 +139,7 @@
 
 .jb-row-main:hover .jb-row-type {
   color: rgba(255, 255, 255, 0.35);
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .jb-row.open .jb-row-type,
@@ -167,7 +167,7 @@
 .jb-row-toggle {
   font-size: 20px;
   font-weight: 300;
-  color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
   flex-shrink: 0;
   width: 20px;
   text-align: center;
@@ -215,7 +215,7 @@
 .jb-excerpt {
   font-size: 14px;
   line-height: 1.8;
-  color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
   max-width: 680px;
   margin-bottom: 22px;
 }
@@ -230,7 +230,7 @@
 .jb-row-desc {
   font-size: 13px;
   line-height: 1.9;
-  color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
   max-width: 680px;
   padding-bottom: 22px;
 }
@@ -242,7 +242,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
+  color: #ffffff;
   margin: 22px 0 8px;
 }
 
@@ -267,11 +267,11 @@
   content: '—';
   position: absolute;
   left: 0;
-  color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 .jb-row-desc strong {
-  color: rgba(255, 255, 255, 0.6);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -309,7 +309,7 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
   cursor: pointer;
   transition: color 0.15s;
   user-select: none;
@@ -327,7 +327,7 @@
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 /* ─── Loading ─────────────────────────────────────────────────── */
@@ -341,13 +341,13 @@
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 .jb-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.1);
   border-top-color: var(--jb-accent, #FF5500);
   border-radius: 50%;
   animation: jb-spin 0.75s linear infinite;
@@ -371,7 +371,7 @@
 
 .jb-error-detail {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
   line-height: 1.7;
   max-width: 500px;
 }
